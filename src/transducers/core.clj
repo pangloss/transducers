@@ -22,10 +22,13 @@
          result)))))
 
 
-(defn branched-xform [pred true-x false-x]
+(defn branched-xform
+  "Will route data down one or another transducer path based on a predicate
+   and merge the results."
+  [pred true-xform false-xform]
   (fn [rf]
-    (let [true-rf (true-x rf)
-          false-rf (false-x rf)]
+    (let [true-rf (true-xform rf)
+          false-rf (false-xform rf)]
       (fn
         ([] (true-rf) (false-rf))
         ([result]
@@ -34,6 +37,17 @@
          (if (pred input)
            (true-rf result input)
            (false-rf result input)))))))
+
+(comment
+  (into []
+        (comp (map inc)
+              (branched-xform even?
+                              (map list)
+                              (comp (mapcat (fn [x] [x x]))
+                                    (map inc)
+                                    (map dec)))
+              (map str))
+        (range 10)))
 
 (defn distinct-by [f]
   (let [seen (volatile! (transient #{}))]
