@@ -1,5 +1,10 @@
 (ns transducers.core)
 
+(defn doprocess
+  "Like dorun for a transducer. Produces no intermediate sequence at all."
+  [xform data]
+  (transduce xform (constantly nil) nil data))
+
 (defn grouped-by
   "A transducer that acts like (seq (group-by f coll)) or if you instantiate it
    as (grouped-by f :keys? false) then it will act like (vals (group-by f coll))"
@@ -21,6 +26,32 @@
                              (assoc! g k [x])))))
          result)))))
 
+
+(defn multiplex [& xforms]
+  (if (seq xforms)
+    (fn [rf]
+      (let [rfs (into [] (map #(% rf)) xforms)]
+        (fn
+          ([] (doseq [f rfs] (f)))
+          ([result]
+           (reduce (fn [result f] (f result)) result rfs))
+          ([result input]
+           (reduce (fn [result f] (f result input)) result rfs)))))
+    (map identity)))
+
+(comment
+  (into [] (comp (map inc)
+                 (multiplex (map inc) (map dec))
+                 (map str))
+        (range 10))
+
+  (into [] (multiplex (map str)
+                      (mapcat (constantly '[x y z]))
+                      (mapcat (constantly []))
+                      (grouped-by odd?)
+                      (grouped-by even? :keys? false)
+                      (mapcat range))
+        (range 5)))
 
 (defn branched-xform
   "Will route data down one or another transducer path based on a predicate
