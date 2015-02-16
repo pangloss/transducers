@@ -32,7 +32,19 @@
          result)))))
 
 
-(defn multiplex [& xforms]
+(defn multiplex
+  "Allow a single chain of transducers to branch data out to be processed by multiple transducers, then merged back into a single one.
+   Data pipeline looks something like this:
+
+   (comp xform1
+         (multiplex xform2 xform3 xform4)
+         xform5)
+
+              ,--<xform2>--.
+   <xform1>--<---<xform3>--->--<xform5>
+              `--<xform4>--'
+   "
+  [& xforms]
   (if (seq xforms)
     (fn [rf]
       (let [rfs (into [] (map #(% rf)) xforms)]
