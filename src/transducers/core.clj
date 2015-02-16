@@ -1,5 +1,10 @@
 (ns transducers.core)
 
+(defn xform
+  "Apply a transducer to get 1 value from 1 input"
+  [f x]
+  ((f (fn [_ y] y)) nil x))
+
 (defn doprocess
   "Like dorun for a transducer. Produces no intermediate sequence at all."
   [xform data]
