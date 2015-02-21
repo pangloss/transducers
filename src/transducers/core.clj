@@ -11,9 +11,16 @@
   (transduce xform (constantly nil) nil data))
 
 (defn grouped-by
-  "A transducer that acts like (seq (group-by f coll)) or if you instantiate it
-   as (grouped-by f :keys? false) then it will act like (vals (group-by f coll))"
-  [f & {:keys [keys?] :or {keys? true}}]
+  "A transducer that acts like (seq (group-by f coll))
+
+   Options:
+
+   :keys? false
+     (grouped-by f :keys? false) is like (vals (group-by f coll))
+
+   :extract fn
+    (grouped-by f :extract extract) is like this library's (group-by-extract f extract coll)."
+  [f & {:keys [keys? extract] :or {keys? true}}]
   (fn [rf]
     (let [group (volatile! (transient (array-map)))]
       (fn
@@ -25,11 +32,36 @@
              (reduce rf result (vals (persistent! @group))))))
         ([result x]
          (vswap! group (fn [g]
-                         (let [k (f x)]
+                         (let [k (f x)
+                               x (if extract (extract x) x)]
                            (if-let [v (get g k)]
                              (assoc! g k (conj v x))
                              (assoc! g k [x])))))
          result)))))
+
+
+(comment
+  (into [] (comp (map (fn [i] {:even (even? i) :i i}))
+                 (grouped-by :even :extract :i))
+        (range 10)))
+
+
+(defn group-by-extract
+  "Works just like group-by, but adds an extraction step. Do do this with just
+   group-by is relatively cumbersome:
+
+    (into {} (map (fn [[k v]] [k (mapv extract v)))
+             (group-by f coll)) "
+  ([g f]
+   (grouped-by g :extract f))
+  ([g f coll]
+   (persistent!
+     (reduce
+       (fn [ret x]
+         (let [k (g x)]
+           (assoc! ret k (conj (get ret k []) (f x)))))
+       (transient {}) coll))))
+
 
 
 (defn multiplex
