@@ -11,7 +11,7 @@
   (transduce xform (constantly nil) nil data))
 
 (defn grouped-by
-  "A transducer that acts like (seq (group-by f coll))
+  "A transducer that acts like group-by but includes the result as a single result in the stream.
 
    Options:
 
@@ -19,7 +19,8 @@
      (grouped-by f :keys? false) is like (vals (group-by f coll))
 
    :extract fn
-    (grouped-by f :extract extract) is like this library's (group-by-extract f extract coll)."
+     (grouped-by f :extract extract) is like this library's (group-by-extract f extract coll).
+   "
   [f & {:keys [keys? extract] :or {keys? true}}]
   (fn [rf]
     (let [group (volatile! (transient (array-map)))]
@@ -28,8 +29,8 @@
         ([result]
          (rf
            (if keys?
-             (reduce rf result (persistent! @group))
-             (reduce rf result (vals (persistent! @group))))))
+             (rf result (persistent! @group))
+             (rf result (vals (persistent! @group))))))
         ([result x]
          (vswap! group (fn [g]
                          (let [k (f x)
@@ -42,7 +43,8 @@
 
 (comment
   (into [] (comp (map (fn [i] {:even (even? i) :i i}))
-                 (grouped-by :even :extract :i))
+                 (grouped-by :even :extract :i)
+                 cat)
         (range 10)))
 
 
