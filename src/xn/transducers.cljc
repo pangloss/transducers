@@ -1,7 +1,8 @@
-(ns transducers.core)
+(ns xn.transducers)
 
 (defn xform
-  "Apply a transducer to get 1 value from 1 input"
+  "Apply a transducer to get the first value (or nil) from 1 input. Will not
+   work on transducers like grouped-by that need to be finalized."
   [f x]
   ((f (fn [_ y] y)) nil x))
 
@@ -104,7 +105,7 @@
                       (mapcat range))
         (range 5)))
 
-(defn branched-xform
+(defn branch
   "Will route data down one or another transducer path based on a predicate
    and merge the results."
   [pred true-xform false-xform]
@@ -123,15 +124,17 @@
 (comment
   (into []
         (comp (map inc)
-              (branched-xform even?
-                              (map list)
-                              (comp (mapcat (fn [x] [x x]))
-                                    (map inc)
-                                    (map dec)))
+              (branch even?
+                      (map list)
+                      (comp (mapcat (fn [x] [x x]))
+                            (map inc)
+                            (map dec)))
               (map str))
         (range 10)))
 
-(defn distinct-by [f]
+(defn distinct-by 
+  "Removes duplicates based on the return value of f."
+  [f]
   (let [seen (volatile! (transient #{}))]
     (filter (fn [x]
               (let [y (f x)]
@@ -157,4 +160,13 @@
   ([f coll]
    (sequence (lasts-by f) coll)))
 
+(defn append
+  "Append a set of raw data to the result of the transducer when the source data is completed. The data will not flow through any of the previous
+   transducers in the chain, but will be processed by any subsquent ones."
+  [coll]
+  (fn [rf]
+    (fn
+      ([] (rf))
+      ([result] (rf (reduce rf result coll)))
+      ([result x] (rf result x)))))
 
