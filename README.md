@@ -36,9 +36,9 @@ Data pipeline looks something like this:
 ```
 
 ```
-           ,--<xform2>--.
-<xform1>--<---<xform3>--->--<xform5>
-           `--<xform4>--'
+           ,-- xform2 --.
+ xform1 --<--- xform3 --->-- xform5
+           `-- xform4 --'
 ```
 
 ### `branch`
