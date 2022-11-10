@@ -1,4 +1,4 @@
-# xn.transducers
+# transducers
 
 A Clojure/ClojureScript library of transducers.
 
@@ -80,7 +80,7 @@ Like dorun for a transducer. Produces no intermediate sequence at all.
 
 ## License
 
-Copyright © 2015 XN Logic
+Copyright © 2022 Darrick Wiebe
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
