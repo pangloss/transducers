@@ -11,30 +11,35 @@ A transducer that acts like group-by but includes the result as a single result 
 Options:
 
 :keys? false
-  (grouped-by f :keys? false) is like (vals (group-by f coll))
+  `(grouped-by f :keys? false)` is like `(vals (group-by f coll))`
 
 :extract fn
-  (grouped-by f :extract extract) is like this library's (group-by-extract f extract coll).
+  `(grouped-by f :extract extract)` is like this library's `(group-by-extract f extract coll)`.
 
 ### `group-by-extract`
 
-Works just like group-by, but adds an extraction step. Do do this with just
-group-by is relatively cumbersome:
+Works just like group-by, but adds an extraction step. 
 
+```clojure
+ (group-by-extract f extract coll)
+```
+
+To do this with just group-by is relatively cumbersome.
+```clojure
  (into {} (map (fn [[k v]] [k (mapv extract v)))
           (group-by f coll))
-
+```
 ### `multiplex`
 
 Allow a single chain of transducers to branch data out to be processed by multiple transducers, then merged back into a single one.
-Data pipeline looks something like this:
 
-```
+```clojure
 (comp xform1
       (multiplex xform2 xform3 xform4)
       xform5)
 ```
 
+Data pipeline looks something like this:
 ```
            ,-- xform2 --.
  xform1 --<--- xform3 --->-- xform5
@@ -54,7 +59,7 @@ Removes duplicates based on the return value of f.
 
 A transducer that accomplishes the following but more efficiently
 
-```
+```clojure
 (->> coll
      (group_by f)
      (map (fn [[k vals]] (last vals))))
@@ -74,7 +79,7 @@ Apply a transducer to get the first value (or nil) from 1 input. Will not work o
 
 ### `doprocess`
 
-Like dorun for a transducer. Produces no intermediate sequence at all.
+Like `dorun` for a transducer. Produces no intermediate sequence at all.
 
 
 
