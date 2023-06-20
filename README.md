@@ -2,6 +2,8 @@
 
 A Clojure/ClojureScript library of transducers.
 
+[Available on CloJars](https://clojars.org/com.xnlogic/transducers)
+
 ## Transducers
 
 ### `grouped-by`
