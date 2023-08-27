@@ -16,22 +16,37 @@
 
    Options:
 
-   :keys? false
-     (grouped-by f :keys? false) is like (vals (group-by f coll))
-
    :extract fn
      (grouped-by f :extract extract) is like this library's (group-by-extract f extract coll).
+
+   :on-value fn
+     apply a function to the final value (after extract is completed)
+
+   :on-map fn
+     apply a function to the final map (after extract and on-value are completed)
+
+   :keys? false
+     (grouped-by f :keys? false) is like (vals (group-by f coll))
+     after extract, on-value and on-map
+
+   :flat? false
+     like :keys? false, but catenates each value into the result
+     after extract, on-value and on-map
    "
-  [f & {:keys [keys? extract] :or {keys? true}}]
+  [f & {:keys [extract on-value on-map keys? flat?] :or {keys? true}}]
   (fn [rf]
     (let [group (volatile! (transient (array-map)))]
       (fn
         ([] (rf))
         ([result]
-         (rf
-           (if keys?
-             (rf result (persistent! @group))
-             (rf result (vals (persistent! @group))))))
+         (let [g (cond-> (persistent! @group)
+                   on-value (update-vals on-value)
+                   on-map on-map)]
+           (rf
+             (cond
+               flat? (reduce rf result (vals g))
+               keys? (rf result g)
+               :else (rf result (vals g))))))
         ([result x]
          (vswap! group (fn [g]
                          (let [k (f x)
@@ -41,96 +56,47 @@
                              (assoc! g k [x])))))
          result)))))
 
+(defn rf-branchable
+  "Helper to adapt a reducing function to a branching transducer.
 
-(comment
-  (into [] (comp (map (fn [i] {:even (even? i) :i i}))
-                 (grouped-by :even :extract :i)
-                 cat)
-        (range 10)))
+  Don't pass the completing of the rf through because completing multiple times
+  is invalid and this transducer will do that after its child xforms have been
+  completed."
+  [rf]
+  (fn ([result] result)
+    ([result item] (rf result item))))
 
+(defn cond-branch
+  "Will route data down the first path whose predicate is truthy. The results are merged.
 
-(defn group-by-extract
-  "Works just like group-by, but adds an extraction step. Do do this with just
-   group-by is relatively cumbersome:
+  Predicates are regular functions. They are called on each element that flows into this
+  transducer until one of the predicates passes, causing the data to be routed down that
+  predicate's xform."
+  [& pred-xform-pairs]
+  (let [pairs (partition-all 2 pred-xform-pairs)]
+    (if (seq pairs)
+      (fn [rf]
+        (let [pairs (mapv (fn [[pred xform]]
+                            (if xform
+                              ;; if pred is not a fn, treat it as either always true or always false.
+                              [(if (ifn? pred) pred (constantly (boolean pred)))
+                               (xform (rf-branchable rf))]
+                              ;; treat sole trailing xform as else:
+                              [(constantly true) (pred (rf-branchable rf))]))
+                      pairs)]
 
-    (into {} (map (fn [[k v]] [k (mapv extract v)))
-             (group-by f coll)) "
-  ([g f]
-   (grouped-by g :extract f))
-  ([g f coll]
-   (persistent!
-     (reduce
-       (fn [ret x]
-         (let [k (g x)]
-           (assoc! ret k (conj (get ret k []) (f x)))))
-       (transient {}) coll))))
-
-
-
-(defn multiplex
-  "Allow a single chain of transducers to branch data out to be processed by multiple transducers, then merged back into a single one.
-   Data pipeline looks something like this:
-
-   (comp xform1
-         (multiplex xform2 xform3 xform4)
-         xform5)
-
-              ,--<xform2>--.
-   <xform1>--<---<xform3>--->--<xform5>
-              `--<xform4>--'
-   "
-  [& xforms]
-  (if (seq xforms)
-    (fn [rf]
-      (let [rfs (into [] (map #(% rf)) xforms)]
-        (fn
-          ([] (doseq [f rfs] (f)))
-          ([result]
-           (reduce (fn [result f] (f result)) result rfs))
-          ([result input]
-           (reduce (fn [result f] (f result input)) result rfs)))))
-    (map identity)))
-
-(comment
-  (into [] (comp (map inc)
-                 (multiplex (map inc) (map dec))
-                 (map str))
-        (range 10))
-
-  (into [] (multiplex (map str)
-                      (mapcat (constantly '[x y z]))
-                      (mapcat (constantly []))
-                      (grouped-by odd?)
-                      (grouped-by even? :keys? false)
-                      (mapcat range))
-        (range 5)))
-
-(defn branch
-  "Will route data down one or another transducer path based on a predicate
-   and merge the results."
-  [pred true-xform false-xform]
-  (fn [rf]
-    (let [true-rf (true-xform rf)
-          false-rf (false-xform rf)]
-      (fn
-        ([] (true-rf) (false-rf))
-        ([result]
-         (true-rf (false-rf result)))
-        ([result input]
-         (if (pred input)
-           (true-rf result input)
-           (false-rf result input)))))))
-
-(comment
-  (into []
-        (comp (map inc)
-              (branch even?
-                      (map list)
-                      (comp (mapcat (fn [x] [x x]))
-                            (map inc)
-                            (map dec)))
-              (map str))
-        (range 10)))
+          (fn
+            ([] (doseq [[_ xform] pairs] (xform)) (rf))
+            ([result]
+             (rf (reduce (fn [result [_ xform]] (xform result)) result pairs)))
+            ([result input]
+             (loop [[[pred xform] & pairs] pairs]
+               (if pred
+                 (if (pred input)
+                   (xform result input)
+                   (recur pairs))
+                 (rf result input)))))))
+      (map identity))))
 
 (defn distinct-by 
   "Removes duplicates based on the return value of f."
@@ -142,23 +108,20 @@
                   (vswap! seen conj! y)
                   true))))))
 
-
 (defn lasts-by
   "A transducer that accomplishes the following but more efficiently
    (->> coll
         (group_by f)
         (map (fn [[k vals]] (last vals))))"
-  ([f]
-   (fn [rf]
-     (let [matches (volatile! (transient (array-map)))]
-       (fn
-         ([] (rf))
-         ([result] (rf (reduce rf result (vals (persistent! @matches)))))
-         ([result x]
-          (vswap! matches assoc! (f x) x)
-          result)))))
-  ([f coll]
-   (sequence (lasts-by f) coll)))
+  [f]
+  (fn [rf]
+    (let [matches (volatile! (transient (array-map)))]
+      (fn
+        ([] (rf))
+        ([result] (rf (reduce rf result (vals (persistent! @matches)))))
+        ([result x]
+         (vswap! matches assoc! (f x) x)
+         result)))))
 
 (defn append
   "Append a set of raw data to the result of the transducer when the source data is completed. The data will not flow through any of the previous
@@ -169,4 +132,104 @@
       ([] (rf))
       ([result] (rf (reduce rf result coll)))
       ([result x] (rf result x)))))
+
+(defn lookahead
+  "Uses a nested transducer as the lookahead body"
+  ([xform]
+   (fn [rf]
+     (let [look (xform (fn ([] nil) ([_] nil) ([_ item] (reduced true))))]
+       (fn
+         ([] (rf))
+         ([result] (rf result))
+         ([result item]
+          (if (look nil item)
+            (rf result item)
+            result))))))
+  ([{:keys [min max]} xform]
+   (fn [rf]
+     (let [finds (volatile! 0)
+           look (xform (fn
+                         ([] nil)
+                         ([_] nil)
+                         ([_ item]
+                          ;; this gets called only when an item would be added to the collection
+                          (vswap! finds inc))))]
+       (fn
+         ([] (rf))
+         ([result] (rf result))
+         ([result item]
+          (vreset! finds 0)
+          (look nil item)
+          (if (<= min @finds max)
+            (rf result item)
+            result)))))))
+
+(defn neg-lookahead
+  "Ensure that the function does NOT produce a collection of at least one item.
+
+   Use the arity 2 version to specify that there must NOT be at least min
+   and/or at most max items in the route. If min or max is nil that limit will
+   not be enforced. The arity 2 version of neg-lookahead is not really recommended
+   as it is a little bit confusing."
+  ([xform]
+   (fn [rf]
+     (let [look (xform (fn ([] nil) ([_] nil) ([_ item] (reduced true))))]
+       (fn
+         ([] (rf))
+         ([result] (rf result))
+         ([result item]
+          (if (look nil item)
+            result
+            (rf result item)))))))
+  ([{:keys [min max]} xform]
+   (fn [rf]
+     (let [finds (volatile! 0)
+           look (xform (fn
+                         ([] nil)
+                         ([_] nil)
+                         ([_ item]
+                          ;; this gets called only when an item would be added to the collection
+                          (vswap! finds inc))))]
+       (fn
+         ([] (rf))
+         ([result] (rf result))
+         ([result item]
+          (vreset! finds 0)
+          (look nil item)
+          (if (<= min @finds max)
+            result
+            (rf result item))))))))
+
+(defn branch
+  "Allow a single chain of transducers to branch data out to be processed by
+  multiple transducers, then merged back into a single one.
+
+  The results of each of the branching xforms are merged into the resulting
+  output in round-robin fashion. If any of the xforms produces multiple
+  results for a single input, they will be sequential in the output.
+
+  If an xform produces data when it is completed, that data will be included at
+  the end of the result stream.
+
+  The data pipeline looks something like this:
+
+   (comp pre-xform
+         (branch xform0 xform1 xform2)
+         post-xform)
+
+                 ,--> xform0 >--.
+   pre-xform >------> xform1 >--->(round-robin merge)--> post-xform
+                 `--> xform2 >--'
+  "
+  [& xforms]
+  (fn [rf]
+    (let [xforms (mapv #(% (rf-branchable rf)) xforms)]
+      (fn
+        ([]
+         (doseq [xform xforms] (xform))
+         (rf))
+        ([result]
+         (rf (reduce (fn [result xform] (xform result)) result xforms)))
+        ([result item]
+         (reduce (fn [result xform] (xform result item)) result xforms))))))
 
