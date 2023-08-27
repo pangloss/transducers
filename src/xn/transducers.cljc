@@ -328,3 +328,29 @@
               result
               (do (vswap! seen conj k)
                   (rf result input))))))))))
+
+(defn sorted-by [f]
+  (fn [rf]
+    (let [a (java.util.ArrayList.)]
+      (fn
+        ([] (rf))
+        ([result]
+         (rf (reduce (fn [result item] (rf result (second item)))
+               result (sort-by first a))))
+        ([result item]
+         (.add a [(f item) item])
+         result)))))
+
+(def sorted (sorted-by identity))
+
+(defn section
+  "Group the results of transforming each element into a collection per-element"
+  [xform]
+  (map #(into [] xform [%])))
+
+(defn section-map [xform coll]
+  (into {}
+    (comp (branch (map identity) (section xform))
+      (partition-all 2))
+    coll))
+

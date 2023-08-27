@@ -209,3 +209,36 @@
 (deftest test-distinct-by
   (is (= [0 1]
         (into [] (distinct-by even?) (range 10)))))
+
+(deftest test-sorted-by
+  (is (= (range 9 -1 -1)
+        (into [] (sorted-by -) (range 10)))))
+
+(deftest test-section
+
+  (is (= {0 [], 1 [0], 2 [0 1], 3 [0 1 2], 4 [0 1 2 3]}
+        (section-map (mapcat range) (range 5))))
+
+  (is (= [[] [0] [0 1] [0 1 2] [0 1 2 3]]
+        (into [] (section (mapcat range))
+          (range 5))))
+
+  (is (= {0 [[] 0], 1 [[0] 1], 2 [[0 1] 2], 3 [[0 1 2] 3], 4 [[0 1 2 3] 4]}
+        (section-map
+          (comp
+            (section (mapcat range))
+            (branch (map identity) (map count)))
+          (range 5))))
+
+  (is (= [[0 [] 0] [1 [0] 1] [2 [0 1] 2] [3 [0 1 2] 3] [4 [0 1 2 3] 4]]
+        (into []
+          (section
+            (branch
+              (map identity)
+              (comp
+                (section (mapcat range))
+                (branch (map identity) (map count)))))
+          (range 5))))
+
+  (is (= '[[()] [(0)] [(0 1)] [(0 1 2)] [(0 1 2 3)]]
+        (into [] (section (map range)) (range 5)))))
