@@ -185,3 +185,27 @@
                      :on-value #(apply + %)
                      :on-map #(- (% true) (% false))))
           (range 10)))))
+
+
+(deftest test-group-count-variants
+  ;; I stringify the sorted ones just to capture their sortedness in the test
+  (is (= {false 5 true 4}
+        (merged (group-count odd?) (range 9))))
+  (is (= {3 1 2 2 1 2 0 1}
+        (merged (group-count abs) (range -3 3))))
+  (is (= "{0 1, 1 2, 2 2, 3 1}"
+        (str (merged (sorted-group-count abs) (range -3 3)))))
+  (is (= {1 #{0 1 2 -1 -2 -3}}
+        (merged (group-by-count) (range -3 3))))
+  (is (= "{2 #{1 2}, 1 #{0}}"
+        (str (merged (group-by-count abs) (range -2 3)))))
+  (is (= "{1 #{0}, 2 #{1 2}}"
+        (str (merged (sorted-group-by-count abs) (range -2 3)))))
+  (is (= "{1 #{0 1 -2 -1 -3 2}}"
+        (str (merged (sorted-group-by-count) (range -3 3)))))
+  (is (= {1 3, 2 3, 3 1, 9 5}
+        (merged (group-count) [1 1 1 2 2 2 3 9 9 9 9 9]))))
+
+(deftest test-distinct-by
+  (is (= [0 1]
+        (into [] (distinct-by even?) (range 10)))))

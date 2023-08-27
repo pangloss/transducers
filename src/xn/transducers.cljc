@@ -1,60 +1,15 @@
 (ns xn.transducers)
 
-(defn xform
-  "Apply a transducer to get the first value (or nil) from 1 input. Will not
-   work on transducers like grouped-by that need to be finalized."
-  [f x]
-  ((f (fn [_ y] y)) nil x))
-
 (defn doprocess
   "Like dorun for a transducer. Produces no intermediate sequence at all."
   [xform data]
   (transduce xform (constantly nil) nil data))
 
-(defn grouped-by
-  "A transducer that acts like group-by but includes the result as a single result in the stream.
-
-   Options:
-
-   :extract fn
-     (grouped-by f :extract extract) is like this library's (group-by-extract f extract coll).
-
-   :on-value fn
-     apply a function to the final value (after extract is completed)
-
-   :on-map fn
-     apply a function to the final map (after extract and on-value are completed)
-
-   :keys? false
-     (grouped-by f :keys? false) is like (vals (group-by f coll))
-     after extract, on-value and on-map
-
-   :flat? false
-     like :keys? false, but catenates each value into the result
-     after extract, on-value and on-map
-   "
-  [f & {:keys [extract on-value on-map keys? flat?] :or {keys? true}}]
-  (fn [rf]
-    (let [group (volatile! (transient (array-map)))]
-      (fn
-        ([] (rf))
-        ([result]
-         (let [g (cond-> (persistent! @group)
-                   on-value (update-vals on-value)
-                   on-map on-map)]
-           (rf
-             (cond
-               flat? (reduce rf result (vals g))
-               keys? (rf result g)
-               :else (rf result (vals g))))))
-        ([result x]
-         (vswap! group (fn [g]
-                         (let [k (f x)
-                               x (if extract (extract x) x)]
-                           (if-let [v (get g k)]
-                             (assoc! g k (conj v x))
-                             (assoc! g k [x])))))
-         result)))))
+(defn merged
+  "If the xform produces only one or more maps, return them merged into a single
+  map."
+  [xform data]
+  (reduce merge (into [] xform data)))
 
 (defn rf-branchable
   "Helper to adapt a reducing function to a branching transducer.
@@ -233,3 +188,139 @@
         ([result item]
          (reduce (fn [result xform] (xform result item)) result xforms))))))
 
+
+(defn grouped-by
+  "A transducer that acts like group-by but includes the result as a single result in the stream.
+
+   Options:
+
+   :extract fn
+     (grouped-by f :extract extract) is like this library's (group-by-extract f extract coll).
+
+   :on-value fn
+     apply a function to the final value (after extract is completed)
+
+   :on-map fn
+     apply a function to the final map (after extract and on-value are completed)
+
+   :keys? false
+     (grouped-by f :keys? false) is like (vals (group-by f coll))
+     after extract, on-value and on-map
+
+   :flat? false
+     like :keys? false, but catenates each value into the result
+     after extract, on-value and on-map
+   "
+  [f & {:keys [extract on-value on-map keys? flat?] :or {keys? true}}]
+  (fn [rf]
+    (let [group (volatile! (transient (array-map)))]
+      (fn
+        ([] (rf))
+        ([result]
+         (let [g (cond-> (persistent! @group)
+                   on-value (update-vals on-value)
+                   on-map on-map)]
+           (rf
+             (cond
+               flat? (reduce rf result (vals g))
+               keys? (rf result g)
+               :else (rf result (vals g))))))
+        ([result x]
+         (vswap! group (fn [g]
+                         (let [k (f x)
+                               x (if extract (extract x) x)]
+                           (if-let [v (get g k)]
+                             (assoc! g k (conj v x))
+                             (assoc! g k [x])))))
+         result)))))
+
+(defn- group-count* [->map assoc post-process f]
+  (fn [rf]
+    (let [group (volatile! (->map))
+          update
+          (if f
+            (fn [item]
+              (vswap! group
+                (fn [g]
+                  (let [k (f item)]
+                    (assoc g k (inc (get g k 0)))))))
+            (fn [item] (vswap! group (fn [g] (assoc g item (inc (get g item 0)))))))]
+      (fn
+        ([] (rf))
+        ([result]
+         (let [g (post-process @group)]
+           (rf (rf result g))))
+        ([result item]
+         (update item)
+         result)))))
+
+(defn group-count
+  "Return a map of {item count-equal-items} or {(f item) count-equal}.
+
+  Arity 1 is basically identical to `frequencies`."
+  {:see-also ["clojure.core/frequencies" "sorted-group-count" "group-by-count"]}
+  ([] (group-count* #(transient (array-map)) assoc! persistent! nil))
+  ([f] (group-count* #(transient (array-map)) assoc! persistent! f)))
+
+
+(defn sorted-group-count
+  "Return a map of {item count-equal-items} or {(f item) count-equal}"
+  {:see-also ["group-count" "group-by-count"]}
+  ([] (group-count* sorted-map assoc identity nil))
+  ([f] (group-count* sorted-map assoc identity f)))
+
+(defn- group-map-by-count
+  ([m]
+   (persistent!
+     (reduce (fn [r [k count]]
+               (assoc! r count (conj (get r count #{}) k)))
+       (transient {})
+       m))))
+
+(defn- group-map-by-count-sorted [m]
+  (reduce (fn [r [k count]]
+            (assoc r count (conj (get r count #{}) k)))
+    (sorted-map)
+    m))
+
+(defn group-by-count
+  "Return a map of {count [all keys with that unique count]}"
+  {:see-also ["group-count" "sorted-group-by-count" "group-by-count>1"]}
+  ([]
+   (group-count* #(transient {}) assoc!
+     (comp group-map-by-count persistent!)
+     nil))
+  ([f]
+   (group-count* #(transient {}) assoc!
+     (comp group-map-by-count persistent!)
+     f)))
+
+(defn sorted-group-by-count
+  "Return a map of {count [all keys with that unique count]}"
+  {:see-also ["group-by-count" "group-by-count>1"]}
+  ([]
+   (group-count* #(transient {}) assoc!
+     (comp group-map-by-count-sorted persistent!)
+     nil))
+  ([f]
+   (group-count* #(transient {}) assoc!
+     (comp group-map-by-count-sorted persistent!)
+     f)))
+
+(defn distinct-by
+  "Returns a lazy sequence of the elements of coll with duplicates removed.
+  Returns a stateful transducer when no collection is provided."
+  {:adapted-from 'clojure.core/distinct
+   :see-also "clojure.core/distinct"}
+  ([key]
+   (fn [rf]
+     (let [seen (volatile! #{})]
+       (fn
+         ([] (rf))
+         ([result] (rf result))
+         ([result input]
+          (let [k (key input)]
+            (if (contains? @seen k)
+              result
+              (do (vswap! seen conj k)
+                  (rf result input))))))))))
