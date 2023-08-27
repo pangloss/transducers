@@ -2,14 +2,18 @@
 
 (defn doprocess
   "Like dorun for a transducer. Produces no intermediate sequence at all."
-  [xform data]
-  (transduce xform (constantly nil) nil data))
+  [xform coll]
+  (transduce xform (constantly nil) nil coll))
 
 (defn merged
   "If the xform produces only one or more maps, return them merged into a single
   map."
-  [xform data]
-  (reduce merge (into [] xform data)))
+  [xform coll]
+  (reduce merge (into [] xform coll)))
+
+(defn counted
+  [xform coll]
+  (transduce xform (completing (fn [n _] (inc n))) 0 coll))
 
 (defn rf-branchable
   "Helper to adapt a reducing function to a branching transducer.
