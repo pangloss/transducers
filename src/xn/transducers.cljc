@@ -341,7 +341,7 @@
          (.add a [(f item) item])
          result)))))
 
-(def sorted (sorted-by identity))
+(defn sorted [] (sorted-by identity))
 
 (defn section
   "Group the results of transforming each element into a collection per-element"
@@ -353,4 +353,3 @@
     (comp (branch (map identity) (section xform))
       (partition-all 2))
     coll))
-
