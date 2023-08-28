@@ -353,3 +353,21 @@
     (comp (branch (map identity) (section xform))
       (partition-all 2))
     coll))
+
+(defn map*
+  "Map over the elements in a sequence of sequences.
+
+  For instance in fermor (out-e*) produces a vector of edges for each node. This
+  would let you work with those edges without flattening the vectors.
+
+  Args:
+    xform: a transducer compatible with the sequence type ie (map ...) if each item is a sequence
+    empty-coll: a function that produces the sequence given to into for each item
+    item-seq: a function that coerces each item into the type of sequence you want"
+  ([xform]
+   (map* empty identity xform))
+  ([empty-coll xform]
+   (map* empty-coll identity xform))
+  ([empty-coll item-seq xform]
+   (map (fn [item*]
+          (into (empty-coll item*) xform (item-seq item*))))))
