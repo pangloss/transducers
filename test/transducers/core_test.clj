@@ -62,6 +62,32 @@
               true (map identity)))
           (range 10))))
 
+  (is (= '[(2) (4) (6) (8) (10)]
+        (into []
+          (comp
+            (map inc)
+            (cond-branch
+              even? (map list)))
+          (range 10))))
+
+  (is (= '[(2) (4) (6) (8) [1 3 5 7 9] (10)]
+        (into []
+          (comp
+            (map inc)
+            (cond-branch
+              even? (map list)
+              true (partition-all 5)))
+          (range 10))))
+
+  (is (= '[(2) (4) (6) [1 3 5 7] (8) (10) [9]]
+        (into []
+          (comp
+            (map inc)
+            (cond-branch
+              even? (map list)
+              true (partition-all 4)))
+          (range 10))))
+
   (is (= '[[1] (2) [3] (4) [5] (6) [7] (8) [9] (10)]
         (into []
           (comp
