@@ -1,4 +1,4 @@
-(ns xn.transducers)
+(ns pangloss.transducers)
 
 (defn doprocess
   "Like dorun for a transducer. Produces no intermediate sequence at all."
@@ -54,7 +54,7 @@
                  (if (pred input)
                    (xform result input)
                    (recur pairs))
-                 (rf result input)))))))
+                 result))))))
       (map identity))))
 
 (defn distinct-by 

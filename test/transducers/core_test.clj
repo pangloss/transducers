@@ -1,6 +1,6 @@
 (ns transducers.core-test
   (:require [clojure.test :refer :all]
-            [xn.transducers :refer :all]))
+            [pangloss.transducers :refer :all]))
 
 (deftest test-branch
   (is (= [;; for 12:
@@ -58,7 +58,8 @@
           (comp
             (map inc)
             (cond-branch
-              even? (map list)))
+              even? (map list)
+              true (map identity)))
           (range 10))))
 
   (is (= '[[1] (2) [3] (4) [5] (6) [7] (8) [9] (10)]
