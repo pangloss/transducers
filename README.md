@@ -2,7 +2,7 @@
 
 A Clojure/ClojureScript library of transducers.
 
-[Available on CloJars](https://clojars.org/com.xnlogic/transducers)
+The v0.1.0 version from 2015 on Clojars is very outdated, until an update is released, please use via a git dep.
 
 ## Transducers
 
