@@ -12,6 +12,7 @@
   (reduce merge (into [] xform coll)))
 
 (defn counted
+  "Return the count of elements in the result rather than the result itself."
   [xform coll]
   (transduce xform (completing (fn [n _] (inc n))) 0 coll))
 
@@ -341,10 +342,22 @@
          (.add a [(f item) item])
          result)))))
 
-(defn sorted [] (sorted-by identity))
+(defn sorted []
+  (fn [rf]
+    (let [a (java.util.ArrayList.)]
+      (fn
+        ([] (rf))
+        ([result]
+         (rf (reduce (fn [result item] (rf result item))
+               result (sort a))))
+        ([result item]
+         (.add a item)
+         result)))))
 
 (defn section
-  "Group the results of transforming each element into a collection per-element"
+  "Group the results of transforming each element into a collection per-element.
+
+  Not a transducer."
   [xform]
   (map #(into [] xform [%])))
 
