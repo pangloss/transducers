@@ -58,30 +58,22 @@
                  result))))))
       (map identity))))
 
-(defn distinct-by 
-  "Removes duplicates based on the return value of f."
-  [f]
-  (let [seen (volatile! (transient #{}))]
-    (filter (fn [x]
-              (let [y (f x)]
-                (when-not (@seen y)
-                  (vswap! seen conj! y)
-                  true))))))
-
 (defn lasts-by
   "A transducer that accomplishes the following but more efficiently
    (->> coll
         (group_by f)
         (map (fn [[k vals]] (last vals))))"
-  [f]
-  (fn [rf]
-    (let [matches (volatile! (transient (array-map)))]
-      (fn
-        ([] (rf))
-        ([result] (rf (reduce rf result (vals (persistent! @matches)))))
-        ([result x]
-         (vswap! matches assoc! (f x) x)
-         result)))))
+  ([f]
+   (fn [rf]
+     (let [matches (volatile! (transient (array-map)))]
+       (fn
+         ([] (rf))
+         ([result] (rf (reduce rf result (vals (persistent! @matches)))))
+         ([result x]
+          (vswap! matches assoc! (f x) x)
+          result)))))
+  ([f coll]
+   (into [] (lasts-by f) coll)))
 
 (defn append
   "Append a set of raw data to the result of the transducer when the source data is completed. The data will not flow through any of the previous
@@ -313,10 +305,7 @@
      f)))
 
 (defn distinct-by
-  "Returns a lazy sequence of the elements of coll with duplicates removed.
-  Returns a stateful transducer when no collection is provided."
-  {:adapted-from 'clojure.core/distinct
-   :see-also "clojure.core/distinct"}
+  "Removes duplicates based on the return value of key."
   ([key]
    (fn [rf]
      (let [seen (volatile! #{})]
@@ -328,7 +317,9 @@
             (if (contains? @seen k)
               result
               (do (vswap! seen conj k)
-                  (rf result input))))))))))
+                  (rf result input)))))))))
+  ([f coll]
+   (into [] (distinct-by f) coll)))
 
 (defn sorted-by [f]
   (fn [rf]
