@@ -322,20 +322,26 @@
    (into [] (distinct-by f) coll)))
 
 (defn duplicates-by
-  "Return only duplicate nodes based on the return value of key.
+  "Return duplicated nodes based on the return value of key.
 
-  Does not return the first one. Empty result means no dups."
+  Empty result means no dups."
   ([key]
    (fn [rf]
-     (let [seen (volatile! #{})]
+     (let [marker (gensym)
+           seen (volatile! {})]
        (fn
          ([] (rf))
          ([result] (rf result))
          ([result input]
           (let [k (key input)]
             (if (contains? @seen k)
-              (rf result input)
-              (do (vswap! seen conj k)
+              (do (let [first (@seen k)]
+                    ;; only add the first node on the first dup instance
+                    (when-not (identical? marker first)
+                      (vswap! seen assoc k marker)
+                      (rf result first)))
+                  (rf result input))
+              (do (vswap! seen assoc k input)
                   result))))))))
   ([f coll]
    (into [] (duplicates-by f) coll)))
