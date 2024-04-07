@@ -321,6 +321,45 @@
   ([f coll]
    (into [] (distinct-by f) coll)))
 
+(defn duplicates-by
+  "Return only duplicate nodes based on the return value of key.
+
+  Does not return the first one. Empty result means no dups."
+  ([key]
+   (fn [rf]
+     (let [seen (volatile! #{})]
+       (fn
+         ([] (rf))
+         ([result] (rf result))
+         ([result input]
+          (let [k (key input)]
+            (if (contains? @seen k)
+              (rf result input)
+              (do (vswap! seen conj k)
+                  result))))))))
+  ([f coll]
+   (into [] (duplicates-by f) coll)))
+
+(defn when-duplicated-by
+  "Return only the first duplicated node based on the return value of key.
+
+  Nil result means no dups."
+  ([key]
+   (fn [rf]
+     (let [seen (volatile! #{})]
+       (fn
+         ([] (rf))
+         ([result] (when (nil? @seen) (rf result)))
+         ([result input]
+          (let [k (key input)]
+            (if (contains? @seen k)
+              (do (vreset! seen nil)
+                  (reduced (rf result input)))
+              (do (vswap! seen conj k)
+                  result))))))))
+  ([f coll]
+   (into [] (duplicates-by f) coll)))
+
 (defn sorted-by [f]
   (fn [rf]
     (let [a (java.util.ArrayList.)]
