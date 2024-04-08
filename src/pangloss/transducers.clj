@@ -63,6 +63,7 @@
    (->> coll
         (group_by f)
         (map (fn [[k vals]] (last vals))))"
+  ([] (lasts-by identity))
   ([f]
    (fn [rf]
      (let [matches (volatile! (transient (array-map)))]
@@ -306,6 +307,7 @@
 
 (defn distinct-by
   "Removes duplicates based on the return value of key."
+  ([] (distinct))
   ([key]
    (fn [rf]
      (let [seen (volatile! #{})]
@@ -325,6 +327,7 @@
   "Return duplicated nodes based on the return value of key.
 
   Empty result means no dups."
+  ([] (duplicates-by identity))
   ([key]
    (fn [rf]
      (let [marker (gensym)
@@ -350,6 +353,7 @@
   "Return only the first duplicated node based on the return value of key.
 
   Nil result means no dups."
+  ([] (when-duplicated-by identity))
   ([key]
    (fn [rf]
      (let [seen (volatile! #{})]
@@ -366,18 +370,6 @@
   ([f coll]
    (into [] (duplicates-by f) coll)))
 
-(defn sorted-by [f]
-  (fn [rf]
-    (let [a (java.util.ArrayList.)]
-      (fn
-        ([] (rf))
-        ([result]
-         (rf (reduce (fn [result item] (rf result (second item)))
-               result (sort-by first a))))
-        ([result item]
-         (.add a [(f item) item])
-         result)))))
-
 (defn sorted []
   (fn [rf]
     (let [a (java.util.ArrayList.)]
@@ -389,6 +381,20 @@
         ([result item]
          (.add a item)
          result)))))
+
+(defn sorted-by
+  ([] (sorted))
+  ([f]
+   (fn [rf]
+     (let [a (java.util.ArrayList.)]
+       (fn
+         ([] (rf))
+         ([result]
+          (rf (reduce (fn [result item] (rf result (second item)))
+                result (sort-by first a))))
+         ([result item]
+          (.add a [(f item) item])
+          result))))))
 
 (defn section
   "Group the results of transforming each element into a collection per-element.
