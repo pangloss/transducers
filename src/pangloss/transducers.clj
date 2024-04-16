@@ -9,12 +9,17 @@
   "If the xform produces only one or more maps, return them merged into a single
   map."
   [xform coll]
-  (reduce merge (into [] xform coll)))
+  (transduce xform merge coll))
 
 (defn counted
   "Return the count of elements in the result rather than the result itself."
   [xform coll]
   (transduce xform (completing (fn [n _] (inc n))) 0 coll))
+
+(defn search
+  "Returns the first result"
+  [xform coll]
+  (transduce xform (fn ([result] result) ([_ item] (reduced item))) nil coll))
 
 (defn rf-branchable
   "Helper to adapt a reducing function to a branching transducer.
