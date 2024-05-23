@@ -82,8 +82,11 @@
    (into [] (lasts-by f) coll)))
 
 (defn append
-  "Append a set of raw data to the result of the transducer when the source data is completed. The data will not flow through any of the previous
-   transducers in the chain, but will be processed by any subsquent ones."
+  "Append a set of raw data to the result of the transducer when the source data
+  is completed. The data will not flow through any of the previous transducers
+  in the chain, but will be processed by any subsquent ones.
+
+  Sort of like cat or concat"
   [coll]
   (fn [rf]
     (fn
